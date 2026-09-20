@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>No Drama Llama - Talking Demo</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #111;
+    color: #eee;
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+  }
+  .app {
+    width: min(1100px, 96vw);
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(300px, 420px);
+    gap: 24px;
+    align-items: center;
+  }
+  .stage {
+    min-height: 70vh;
+    display: grid;
+    place-items: center;
+    background:
+      linear-gradient(45deg,#1a1a1a 25%,transparent 25%),
+      linear-gradient(-45deg,#1a1a1a 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#1a1a1a 75%),
+      linear-gradient(-45deg,transparent 75%,#1a1a1a 75%),
+      #222;
+    background-size: 24px 24px;
+    background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  #llama {
+    width: min(95%, 720px);
+    max-height: 78vh;
+    object-fit: contain;
+    user-select: none;
+    pointer-events: none;
+  }
+  .panel {
+    background: #1b1b1b;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.3);
+  }
+  h1 { margin-top: 0; font-size: 1.4rem; }
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+    box-sizing: border-box;
+    background: #0f0f0f;
+    color: #eee;
+    border: 1px solid #444;
+    border-radius: 10px;
+    padding: 12px;
+    font: inherit;
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  button {
+    border: 0;
+    border-radius: 9px;
+    padding: 10px 14px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button.primary { background: #eee; color: #111; }
+  button.secondary { background: #333; color: #eee; }
+  .status {
+    margin-top: 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #aaa;
+    font-size: .9rem;
+  }
+  .viseme-grid {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .viseme-grid button {
+    background: #292929;
+    color: #ddd;
+    padding: 8px;
+  }
+  .hint {
+    color: #aaa;
+    font-size: .9rem;
+    line-height: 1.45;
+  }
+  @media (max-width: 850px) {
+    .app { grid-template-columns: 1fr; }
+    .stage { min-height: 55vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <img id="llama" src="rest.png" alt="No Drama llama">
+  </div>
+
+  <section class="panel">
+    <h1>No Drama Llama — Talking Demo</h1>
+    <p class="hint">
+      This is a lightweight viseme demo. It swaps transparent PNG mouth poses while optional browser speech plays.
+      The mapping is intentionally simple, but demonstrates the animation pipeline.
+    </p>
+
+    <textarea id="script">No drama, llama. We ship clean code and keep the chaos out of production.</textarea>
+
+    <div class="row">
+      <button class="primary" id="talkBtn">Talk</button>
+      <button class="secondary" id="stopBtn">Stop</button>
+      <button class="secondary" id="loopBtn">Loop: Off</button>
+    </div>
+
+    <div class="viseme-grid">
+      <button data-v="rest">REST</button>
+      <button data-v="mbp">M/B/P</button>
+      <button data-v="ah">A/AH</button>
+      <button data-v="ee">E/EE</button>
+      <button data-v="oh">O</button>
+      <button data-v="uwq">U/W/Q</button>
+      <button data-v="fv">F/V</button>
+      <button data-v="l">L</button>
+    </div>
+
+    <div class="status" id="status">viseme: rest</div>
+  </section>
+</div>
+
+<script>
+const IMG = {
+  rest: "rest.png",
+  mbp: "mbp.png",
+  ah: "ah.png",
+  ee: "ee.png",
+  oh: "oh.png",
+  uwq: "uwq.png",
+  fv: "fv.png",
+  l: "l.png"
+};
+
+const llama = document.getElementById("llama");
+const statusEl = document.getElementById("status");
+const scriptEl = document.getElementById("script");
+const talkBtn = document.getElementById("talkBtn");
+const stopBtn = document.getElementById("stopBtn");
+const loopBtn = document.getElementById("loopBtn");
+
+let timer = null;
+let running = false;
+let looping = false;
+
+function showViseme(v) {
+  llama.src = IMG[v] || IMG.rest;
+  statusEl.textContent = "viseme: " + v;
+}
+
+// Very small text-to-viseme heuristic.
+// For production, replace this with timestamps from a TTS/phoneme alignment system.
+function charToViseme(ch, next = "") {
+  const c = ch.toLowerCase();
+
+  if ("bmp".includes(c)) return "mbp";
+  if ("fv".includes(c)) return "fv";
+  if (c === "l") return "l";
+  if ("o".includes(c)) return "oh";
+  if ("uwq".includes(c)) return "uwq";
+  if ("ei y".includes(c)) return "ee";
+  if ("a".includes(c)) return "ah";
+
+  // Common digraph approximations
+  const pair = (c + next.toLowerCase());
+  if (pair === "oo" || pair === "ou") return "uwq";
+  if (pair === "ee" || pair === "ea") return "ee";
+
+  if (/[.,!?;:\s]/.test(c)) return "rest";
+  return Math.random() > 0.5 ? "ah" : "ee";
+}
+
+function buildSequence(text) {
+  const seq = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1] || "";
+    const viseme = charToViseme(ch, next);
+
+    // Ignore some repeated states so motion feels less machine-gun-like.
+    if (!seq.length || seq[seq.length - 1].v !== viseme || /[.,!?]/.test(ch)) {
+      let ms = 85;
+      if (/[.,!?]/.test(ch)) ms = 180;
+      if (ch === " ") ms = 70;
+      seq.push({ v: viseme, ms });
+    }
+  }
+
+  seq.push({ v: "rest", ms: 150 });
+  return seq;
+}
+
+function stopTalking() {
+  running = false;
+  clearTimeout(timer);
+  timer = null;
+  speechSynthesis.cancel();
+  showViseme("rest");
+}
+
+function speakAudio(text) {
+  if (!("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.02;
+  u.pitch = 0.9;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+function runSequence(seq, index = 0) {
+  if (!running) return;
+
+  if (index >= seq.length) {
+    showViseme("rest");
+    running = false;
+    if (looping) {
+      timer = setTimeout(startTalking, 350);
+    }
+    return;
+  }
+
+  const frame = seq[index];
+  showViseme(frame.v);
+  timer = setTimeout(() => runSequence(seq, index + 1), frame.ms);
+}
+
+function startTalking() {
+  stopTalking();
+  const text = scriptEl.value.trim();
+  if (!text) return;
+
+  running = true;
+  const seq = buildSequence(text);
+  speakAudio(text);
+  runSequence(seq);
+}
+
+talkBtn.addEventListener("click", startTalking);
+stopBtn.addEventListener("click", stopTalking);
+
+loopBtn.addEventListener("click", () => {
+  looping = !looping;
+  loopBtn.textContent = "Loop: " + (looping ? "On" : "Off");
+});
+
+document.querySelectorAll("[data-v]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    stopTalking();
+    showViseme(btn.dataset.v);
+  });
+});
+
+// Keyboard shortcuts for testing:
+// Space = talk/stop, 1..8 = individual visemes
+const keyMap = {
+  "1":"rest","2":"mbp","3":"ah","4":"ee",
+  "5":"oh","6":"uwq","7":"fv","8":"l"
+};
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA") return;
+
+  if (e.code === "Space") {
+    e.preventDefault();
+    running ? stopTalking() : startTalking();
+  } else if (keyMap[e.key]) {
+    stopTalking();
+    showViseme(keyMap[e.key]);
+  }
+});
+</script>
+</body>
+</html>
