@@ -159,6 +159,14 @@ const IMG = {
   l: "l.png"
 };
 
+// Preload all viseme images so src changes don't trigger network fetches
+const IMG_PRELOADED = {};
+Object.entries(IMG).forEach(([key, src]) => {
+  const pre = new Image();
+  pre.src = src;
+  IMG_PRELOADED[key] = pre;
+});
+
 const llama = document.getElementById("llama");
 const statusEl = document.getElementById("status");
 const scriptEl = document.getElementById("script");
@@ -193,8 +201,11 @@ if ("speechSynthesis" in window) {
 }
 
 function showViseme(v) {
-  llama.src = IMG[v] || IMG.rest;
-  statusEl.textContent = "viseme: " + v;
+  const src = IMG[v] || IMG.rest;
+  if (llama.getAttribute("src") !== src) {
+    llama.src = src;
+    statusEl.textContent = "viseme: " + v;
+  }
 }
 
 // Very small text-to-viseme heuristic.
