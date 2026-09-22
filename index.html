@@ -193,7 +193,6 @@ if ("speechSynthesis" in window) {
 }
 
 function showViseme(v) {
-  console.log("viseme change:", v, "-> src:", IMG[v] || IMG.rest);
   llama.src = IMG[v] || IMG.rest;
   statusEl.textContent = "viseme: " + v;
 }
